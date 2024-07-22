@@ -692,10 +692,10 @@ class Pipeline:
                 new_config_text += [line]
                     
         
-        new_config = '\n'.join(new_config_text)
+        new_config_item = '\n'.join(new_config_text)
         
         with open(config_file, "w", encoding="utf-8") as open_config:
-            open_config.write(new_config)
+            open_config.write(new_config_item)
 
         print(" [DONE]")
         
@@ -1961,7 +1961,7 @@ class Pipeline:
         obj_date_obs: list = None, 
         sky_date_obs: list = None, 
         output_name: str = 'product', 
-        use_corr_wavemap: str = None
+        use_corr_wavemap: Union[str, None] = None
     ) -> None:
         """
         Method for running ``eris_ifu_jitter``.
