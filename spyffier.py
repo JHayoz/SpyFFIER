@@ -30,7 +30,7 @@ from skimage.restoration import inpaint
 from typeguard import typechecked
 from skimage.registration import phase_cross_correlation
 
-from utils import rebin
+from utils import rebin,calibrate_wavelength_frame,fit_wavelength_error
 
 
 class Pipeline:
@@ -2232,25 +2232,6 @@ class Pipeline:
         save_result=True
     ) -> dict:
         
-        # function to fit a linear function to the wavelength shift within a slitlet
-        def fit_wavelength_error(wvl_shift,deg=1,lim_mask=4,lim_sel=1,median=0):
-            # wvl_shift: error in pixels
-            
-            mask_good = np.abs(wvl_shift-median) < lim_mask
-            
-            x,y=np.arange(len(wvl_shift)),wvl_shift
-            if np.sum(mask_good) < 0.5*len(wvl_shift):
-                y_fit=np.ones_like(mask_good)*median
-                y_calib=y_fit
-            else:
-                x_good,y_good = x[mask_good],y[mask_good]
-                pols = np.polyfit(x_good,y_good,deg=deg)
-                p = np.poly1d(pols)
-                y_fit = p(x)
-                mask_close = np.abs(wvl_shift-y_fit) < lim_sel
-                y_calib = np.where(mask_close,wvl_shift,y_fit)
-            return y_fit,y_calib
-        
         # get WAVE_MAP
         wavemap_all_files = list(self.file_dict['WAVE_MAP'].keys())
         wavemap_files = []
@@ -2430,6 +2411,114 @@ class Pipeline:
             with open(self.json_file, "w", encoding="utf-8") as json_file:
                 json.dump(self.file_dict, json_file, indent=4)
         return wavemap_corr_file_correspondence
+
+    @typechecked
+    def calib_wavelength_xcorr_full(
+        self,
+        input_folder,
+        output_folder,
+        continuum_sigma=60,
+        accuracy=10,
+        method = 'spline', # '0-order','0-order-linear','0-order-median','spline'
+        spline_order=2,
+        spline_smoothing=0.4,
+        window_size=120,
+        window_shift_ratio=4,
+        plot=True,save_result=True
+    ) -> None:
+
+        # get the object files
+        object_waveB = []
+        for file_path,item in self.file_dict['OBJECT_WAVE_B'].items():
+            if Path(file_path).parent.name == input_folder:
+                print(file_path)
+                hdr = fits.getheader(file_path)
+                if hdr['ESO DPR TYPE'] == 'OBJECT':
+                    object_waveB += [file_path]
+                    print(hdr['ESO DPR TYPE'])
+        if len(object_waveB) == 0:
+            raise RuntimeError(
+                "No OBJECT_WAVE_B files found.")
+        
+        # get the wavemap
+        wavemap_all_files = list(self.file_dict['WAVE_MAP'].keys())
+        wavemap_files = []
+        if len(wavemap_all_files) == 1:
+            wavemap_files += [wavemap_all_files[0]]
+        else:
+            for file_i in wavemap_all_files:
+                if not input_dir is None:
+                    if Path(file_i).parent.name == input_dir:
+                        wavemap_files += [file_i]
+                else:
+                    wavemap_files += [file_i]
+        if len(wavemap_files) == 0:
+            raise RuntimeError(
+                        "No WAVE_MAP files found."
+                    )
+        elif len(wavemap_files) > 1:
+            print('Several WAVE_MAP files found. Taking the first one.')
+        wavemap = fits.getdata(wavemap_files[0])
+        wavemap_header = fits.getheader(wavemap_files[0])
+        
+        # create output folder
+        if output_folder is None:
+            output_dir = self.calib_folder / "calib_wavelength_cross_corr" / input_dir
+        else:
+            output_dir = self.calib_folder / "calib_wavelength_cross_corr" / output_folder
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        # go through each object cube
+        for obj_i,file_path in enumerate(object_waveB):
+            hdr = fits.getdata(file_path)
+            date_obs = hdr['DATE-OBS']
+            print('Calibrating object cube %s' % date_obs)
+            
+            object_data = fits.getdata(file_path)
+            lenwvl,lenxy = np.shape(object_data)
+            wvl_params = [hdr['CRVAL2'],hdr['CD2_2']]
+            wavelength = np.array([wvl_params[0] + i*wvl_params[1] for i in np.arange(lenwvl)])
+            mean_d_wvl = np.mean(wavelength[:1]-wavelength[:-1])
+            # read telluric model
+            skycoord = SkyCoord(ra=hdr['RA'],dec=hdr['DEC'],unit='deg')
+            string_coord = skycoord.to_string('hmsdms').replace('h',' ').replace('d',' ').replace('m',' ').replace('s','')
+            tellurics_wlen,tellurics_transm,tellurics_flux = get_sky_calc_model(obj_coord=string_coord,date=date_obs[:19])
+            
+            # apply algorithm depending on method, save the px shift to each wavemap pixel
+            wlen_corr_model_frame,wlen_corr_model_frame_px = calibrate_wavelength_frame(
+                object_data,wavelength,
+                tellurics_wlen=tellurics_wlen,tellurics_transm=tellurics_transm,
+                filter_sigma=filter_sigma,
+                accuracy = accuracy,
+                spline_order = spline_order,spline_smoothing = spline_smoothing,
+                window_size = window_size,window_shift_ratio=window_shift_ratio,
+                method=method,
+                plot=plot
+                )
+            # apply correction to wavemap
+            wavemap_corr = np.zeros((2048,2048))
+            for ij in np.arange(2048):
+                # interpolate the correction to the wavelength of the wavemap
+                interp_corr = interp1d(x=wavelength,y=wlen_corr_model_frame_px[:,ij],bounds_error=False,fill_value='extrapolate')
+                column_correction = interp_corr(wavemap[:,ij])
+                
+                wavemap_corr[:,ij] = wavemap[:,ij] - column_correction*mean_d_wvl
+            # save new wavemap
+            wavemap_corr_filepath = output_dir / ('wavemap_corr_' + date_obs + '.fits')
+            if save_result:
+                primary_hdu = fits.PrimaryHDU(data=wavemap_corr,header=wavemap_header)
+                hdu_list = fits.HDUList([primary_hdu])
+                hdu_list.writeto(wavemap_corr_filepath,overwrite=True)
+                # update file_dict
+                self._update_files('WAVE_MAP_CORR', str(wavemap_corr_filepath))
+        
+        # Write updated dictionary to JSON file
+        if save_result:
+            if save_result:
+                with open(self.json_file, "w", encoding="utf-8") as json_file:
+                    json.dump(self.file_dict, json_file, indent=4)
+
     @typechecked
     def do_standard_reduction(
         self,
