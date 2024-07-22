@@ -30,7 +30,7 @@ from skimage.restoration import inpaint
 from typeguard import typechecked
 from skimage.registration import phase_cross_correlation
 
-from utils import rebin,calibrate_wavelength_frame,fit_wavelength_error
+from utils import rebin,calibrate_wavelength_frame,fit_wavelength_error,get_sky_calc_model
 
 
 class Pipeline:
@@ -2430,6 +2430,8 @@ class Pipeline:
         # get the object files
         object_waveB = []
         for file_path,item in self.file_dict['OBJECT_WAVE_B'].items():
+            if 'corr_wavemap' in file_path:
+                continue
             if Path(file_path).parent.name == input_folder:
                 print(file_path)
                 hdr = fits.getheader(file_path)
@@ -2471,7 +2473,7 @@ class Pipeline:
         
         # go through each object cube
         for obj_i,file_path in enumerate(object_waveB):
-            hdr = fits.getdata(file_path)
+            hdr = fits.getheader(file_path)
             date_obs = hdr['DATE-OBS']
             print('Calibrating object cube %s' % date_obs)
             
@@ -2489,7 +2491,7 @@ class Pipeline:
             wlen_corr_model_frame,wlen_corr_model_frame_px = calibrate_wavelength_frame(
                 object_data,wavelength,
                 tellurics_wlen=tellurics_wlen,tellurics_transm=tellurics_transm,
-                filter_sigma=filter_sigma,
+                filter_sigma=continuum_sigma,
                 accuracy = accuracy,
                 spline_order = spline_order,spline_smoothing = spline_smoothing,
                 window_size = window_size,window_shift_ratio=window_shift_ratio,
@@ -2500,7 +2502,7 @@ class Pipeline:
             wavemap_corr = np.zeros((2048,2048))
             for ij in np.arange(2048):
                 # interpolate the correction to the wavelength of the wavemap
-                interp_corr = interp1d(x=wavelength,y=wlen_corr_model_frame_px[:,ij],bounds_error=False,fill_value='extrapolate')
+                interp_corr = interpolate.interp1d(x=wavelength,y=wlen_corr_model_frame_px[:,ij],bounds_error=False,fill_value='extrapolate')
                 column_correction = interp_corr(wavemap[:,ij])
                 
                 wavemap_corr[:,ij] = wavemap[:,ij] - column_correction*mean_d_wvl

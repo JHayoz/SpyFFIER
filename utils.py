@@ -2,6 +2,31 @@ import numpy as np
 from spectres import spectres
 from scipy.ndimage import gaussian_filter
 from skimage.registration import phase_cross_correlation
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+import skycalc_ipy
+from scipy.interpolate import UnivariateSpline,interp1d
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+def get_sky_calc_model(obj_coord='23 07 28.9014701064 +21 08 02.109792078',date='2023-10-15T03:25:30'):
+    
+    coord_target = SkyCoord('%s:%s:%s %s:%s:%s' % tuple(obj_coord.split(' ')),unit=(u.hourangle,u.degree))
+    
+    ra=coord_target.ra.value
+    dec=coord_target.dec.value
+    
+    skycalc = skycalc_ipy.SkyCalc()
+    skycalc.get_almanac_data(ra=ra, dec=dec,
+                             date=date,
+                             update_values=True)
+    skycalc["msolflux"] = 130       # [sfu] For dates after 2019-01-31
+    skycalc['wres'],skycalc['wmin'],skycalc['wmax'] = 50000,1500,3000
+    tbl = skycalc.get_sky_spectrum()
+    wvl = tbl['lam'].data/1e3
+    transm = tbl['trans'].data
+    flux = tbl['flux'].data
+    return wvl,transm,flux
 
 def rebin(wlen,flux,wlen_data,flux_err = None, method='linear'):
     #wlen larger than wlen_data
@@ -62,6 +87,86 @@ def fit_wavelength_error(wvl_shift,deg=1,lim_mask=4,lim_sel=1,median=0):
         mask_close = np.abs(wvl_shift-y_fit) < lim_sel
         y_calib = np.where(mask_close,wvl_shift,y_fit)
     return y_fit,y_calib
+
+def _xcor_spline_wavelength_solution(
+    wlen,spectrum_cr,
+    tellurics_wlen,tellurics_transm_cr,
+    filter_sigma=60,
+    accuracy = 20,
+    spline_order = 2,spline_smoothing = 0.4,
+    window_size = 160,window_shift_ratio=4,
+    plot=False
+):
+    mean_wvl_step = np.mean(wlen[1:]-wlen[:-1])
+    
+    # # rebin tellurics
+    # tellurics_wlen_rebin,tellurics_transm_rebin = rebin(tellurics_wlen,tellurics_transm,wlen,flux_err = None, method='datalike')
+    # 
+    # # Remove continuum
+    # spectrum_smooth = gaussian_filter(spectrum,sigma=filter_sigma)
+    # spectrum_cr = spectrum - spectrum_smooth
+# 
+    # tellurics_smooth = gaussian_filter(tellurics_transm_rebin,sigma=filter_sigma)
+    # tellurics_transm_cr = tellurics_transm_rebin - tellurics_smooth
+    
+    if plot:
+        plt.figure(figsize=(10,5))
+        plt.plot(wlen,spectrum_cr/np.std(spectrum_cr))
+        plt.plot(wlen,tellurics_transm_cr/np.std(tellurics_transm_cr))
+        plt.show()
+    
+    # before doing the rolling, just determine a shift
+    shift_wvl_init, _, _ = phase_cross_correlation(
+                spectrum_cr,
+                tellurics_transm_cr,
+                normalization=None,
+                upsample_factor=accuracy,
+                overlap_ratio=0.5)
+    
+    wlen_corr_init = wlen - shift_wvl_init*mean_wvl_step
+    
+    # define the intervals for the rolling cross-correlation
+    window_shift = window_size//window_shift_ratio
+    nb_intervals = len(wlen)//window_shift
+    
+    shift_wvl_px = np.zeros((nb_intervals))
+    for itv_i in np.arange(nb_intervals):
+        
+        tellurics_transm_interv = tellurics_transm_cr[itv_i*window_shift:itv_i*window_shift + window_size]
+        spectrum_cr_interv = spectrum_cr[itv_i*window_shift:itv_i*window_shift + window_size]
+        
+        shift_wvl_px[itv_i], _, _ = phase_cross_correlation(
+                    spectrum_cr_interv,
+                    tellurics_transm_interv,
+                    normalization=None,
+                    upsample_factor=accuracy,
+                    overlap_ratio=0.5)
+    
+    shift_wvl_px_position = np.array([(i+1)*window_shift for i in np.arange(nb_intervals)])
+    mask_bad = np.abs(shift_wvl_px-np.median(shift_wvl_px)) > 10
+
+    xs = np.arange(len(wlen))
+    
+    if np.sum(~mask_bad) < nb_intervals/2:
+        print('Warning: skipping spline fitting because too few trustworthy samples')
+        shift_wvl_spline = np.zeros((len(xs)))
+    else:
+        spl = UnivariateSpline(shift_wvl_px_position[~mask_bad], shift_wvl_px[~mask_bad],k=spline_order)
+        spl.set_smoothing_factor(spline_smoothing)
+        
+        shift_wvl_spline = spl(xs)
+    
+    if plot:
+        plt.figure()
+        plt.plot(shift_wvl_px_position,shift_wvl_px)
+        plt.plot(xs,shift_wvl_spline)
+        plt.ylim((-5,5))
+        plt.show()
+    
+    wlen_corrected = wlen - shift_wvl_spline*mean_wvl_step
+    
+    return wlen_corr_init,wlen_corrected,shift_wvl_spline
+
 def calibrate_wavelength_frame(
     object_data,wavelength,
     tellurics_wlen,tellurics_transm,
