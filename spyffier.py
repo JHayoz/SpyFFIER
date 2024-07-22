@@ -30,8 +30,7 @@ from skimage.restoration import inpaint
 from typeguard import typechecked
 from skimage.registration import phase_cross_correlation
 
-sys.path.append('/home/ipa/quanz/user_accounts/jhayoz/Projects/archival_SINFONI/SINFONI_pipeline/Pynpoint_ifs')
-from background_files.ifu_utils import rebin
+from utils import rebin
 
 
 class Pipeline:
