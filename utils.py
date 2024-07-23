@@ -328,10 +328,10 @@ def calibrate_wavelength_frame(
             _,_,shift_wvl_spline = _xcor_spline_wavelength_solution(
                 wlen=wvl_collapsed,spectrum_cr=collapsed_spectrum_cr,
                 tellurics_wlen=tellurics_wlen_rebin,tellurics_transm_cr=tellurics_transm_cr,
-                filter_sigma=60,
-                accuracy = 20,
-                spline_order = 2,spline_smoothing = 0.4,
-                window_size = 120,window_shift_ratio=4,
+                filter_sigma=filter_sigma,
+                accuracy = accuracy,
+                spline_order = spline_order,spline_smoothing = spline_smoothing,
+                window_size = window_size,window_shift_ratio=window_shift_ratio,
                 plot=False
             )
             
