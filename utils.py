@@ -183,7 +183,7 @@ def _xcor_spline_wavelength_solution(
                     overlap_ratio=0.5)
     
     shift_wvl_px_position = np.array([(i+1)*window_shift for i in np.arange(nb_intervals)])
-    mask_bad = np.abs(shift_wvl_px-np.median(shift_wvl_px)) > 10
+    mask_bad = np.abs(shift_wvl_px-np.median(shift_wvl_init)) > 2
 
     xs = np.arange(len(wlen))
     
@@ -191,7 +191,7 @@ def _xcor_spline_wavelength_solution(
         print('Warning: skipping spline fitting because too few trustworthy samples')
         shift_wvl_spline = np.zeros((len(xs)))
     else:
-        spl = UnivariateSpline(shift_wvl_px_position[~mask_bad], shift_wvl_px[~mask_bad],k=spline_order)
+        spl = UnivariateSpline(shift_wvl_px_position[~mask_bad], shift_wvl_px[~mask_bad],k=spline_order,ext=3)
         spl.set_smoothing_factor(spline_smoothing)
         
         shift_wvl_spline = spl(xs)
@@ -244,22 +244,31 @@ def calibrate_wavelength_frame(
     # initial error
     wlen_corr_init = np.zeros((lenxy))
     print('Determine initial wavelength shift')
-    for ij in np.arange(lenxy):
-        print('Progress %.2f' % ((ij+1)/lenxy*100),end='\r')
-        
-        spectrum_data = object_data[lower_bound:upper_bound,ij]
-        
-        # Remove continuum
-        spectrum_smooth = gaussian_filter(spectrum_data,sigma=filter_sigma)
-        spectrum_cr = spectrum_data - spectrum_smooth
-
-        # cross-correlation
-        wlen_corr_init[ij], _, _ = phase_cross_correlation(
-                    spectrum_cr,
-                    tellurics_transm_cr,
-                    normalization=None,
-                    upsample_factor=accuracy,
-                    overlap_ratio=0.5)
+    # for ij in np.arange(lenxy):
+    for slit_i in np.arange(32):
+        for col_j in np.arange(64):
+            ij = slit_i*64 + col_j
+            print('Progress %.2f' % ((ij+1)/lenxy*100),end='\r')
+            
+            # spectrum_data = object_data[lower_bound:upper_bound,ij]
+            # take 3 adjacent columns instead of just 1 column
+            low_j = max([0,col_j-1])
+            high_j = min([63,col_j + 2])
+            sel_data = object_data[lower_bound:upper_bound,slit_i*64 + low_j:slit_i*64 + high_j]
+            
+            spectrum_data = np.nanmean(sel_data,axis=1)
+            
+            # Remove continuum
+            spectrum_smooth = gaussian_filter(spectrum_data,sigma=filter_sigma)
+            spectrum_cr = spectrum_data - spectrum_smooth
+    
+            # cross-correlation
+            wlen_corr_init[ij], _, _ = phase_cross_correlation(
+                        spectrum_cr,
+                        tellurics_transm_cr,
+                        normalization=None,
+                        upsample_factor=accuracy,
+                        overlap_ratio=0.5)
     print('')
     print('Finished')
     if method == '0-order':
@@ -296,7 +305,7 @@ def calibrate_wavelength_frame(
                 wlen_corr_model_frame_px[:,slit_i*64:(slit_i+1)*64] = y_calib
                 wlen_slit_shift[slit_i,:] = y_calib
                 continue
-            y_spline = fit_spline(y_calib,mask_bad = np.zeros_like(y_calib,dtype=bool),s=0.1,k=3)
+            y_spline = fit_spline(y_calib,mask_bad = np.zeros_like(y_calib,dtype=bool),s=0.2,k=2)
             if method == '0-order-spline':
                 wlen_corr_model_frame_px[:,slit_i*64:(slit_i+1)*64] = y_spline
                 wlen_slit_shift[slit_i,:] = y_spline
@@ -372,6 +381,7 @@ def calibrate_wavelength_frame(
         plt.title('Wavelength shift over the frame')
         plt.ylabel('Correction [px]')
         plt.xlabel('Column number')
+        plt.legend()
         plt.show()
         
         # plot the splines

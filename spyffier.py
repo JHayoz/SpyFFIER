@@ -574,7 +574,7 @@ class Pipeline:
         else:
             raise RuntimeError(
                 f"No WAVE_MAP_CORR found within the folder {input_dir}"
-                f"and {obs_date} in file_dict"
+                f" and {obs_date} in file_dict"
             )
     @typechecked
     def _create_config(
@@ -2638,8 +2638,8 @@ class Pipeline:
             print(f"\nFound SOF file: {sof_file}")
 
         # Create EsoRex configuration file if not found
-
-        self._create_config("eris_ifu_combine_hdrl", "science_ifu_combine", verbose, output_dir = output_dir)
+        which_combine_recipe = 'eris_ifu_combine' # _hdrl
+        self._create_config(which_combine_recipe, "science_ifu_combine", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
@@ -2647,16 +2647,16 @@ class Pipeline:
 
         config_file = output_dir / 'science_ifu_combine.rc'
         
-        self.modify_config(config_file, new_config = {'name_i':str(offsets_file)}, eso_recipe = 'eris_ifu_combine_hdrl')
+        self.modify_config(config_file, new_config = {'name_i':str(offsets_file)}, eso_recipe = which_combine_recipe)
         if len(new_config.keys()) > 0:
-            self.modify_config(config_file, new_config = new_config, eso_recipe = 'eris_ifu_combine_hdrl')
+            self.modify_config(config_file, new_config = new_config, eso_recipe = which_combine_recipe)
         
         esorex = [
             self.esorex_path,
             f"--recipe-config={config_file}",
             f"--output-dir={output_dir}",
             '--no-checksum',
-            "eris_ifu_combine_hdrl",
+            which_combine_recipe,
             sof_file,
         ]
 
