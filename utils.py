@@ -9,6 +9,46 @@ from scipy.interpolate import UnivariateSpline,interp1d
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
+def plot_data(data,vmin=5,vmax=95):
+    plt.figure(figsize=(10,10))
+    plt.imshow(data,vmin=np.nanpercentile(data,vmin),vmax=np.nanpercentile(data,vmax),origin='lower')
+    plt.show()
+
+def plot_spectrum(wlen,spectrum,range=(2.2,2.45),kwargs={}):
+    mask = np.logical_and(wlen > range[0], wlen < range[1])
+    if np.sum(mask) == 0:
+        return
+    sum = np.std(spectrum[mask])
+    plt.plot(wlen[mask],spectrum[mask]/sum-np.mean(spectrum[mask]/sum),**kwargs)
+    if 'label' in kwargs.keys():
+        plt.legend()
+def diagnostic_wvl_solution(wlen_ref,wlen_dict,flux_dict,nb_intervals = 3,interval = 0.01,plot_correction=True):
+    colors_x = np.linspace(0,1,len(wlen_dict.keys()))
+    colors = {key:mpl.colormaps['viridis'](colors_x[key_i]) for key_i,key in enumerate(wlen_dict.keys())}
+    if plot_correction:
+        plt.figure(figsize=(8,2))
+        for key in wlen_dict.keys():
+            if key == 'Tellurics':
+                continue
+            plt.plot(wlen_ref,(wlen_ref-wlen_dict[key])/(wlen_ref[1]-wlen_ref[0]),color=colors[key],label=key)
+        plt.title('Wavelength correction')
+        plt.ylabel('Correction [px]')
+        plt.xlabel(r'Wavelength [$\mu$m]')
+        plt.legend()
+        plt.show()
+    range_start = np.linspace(wlen_ref[0],wlen_ref[-1]-interval,nb_intervals)
+    for i in np.arange(nb_intervals):
+        plt.figure(figsize=(10,3))
+        for key in wlen_dict.keys():
+            if key == 'Tellurics':
+                color = 'r'
+            else:
+                color = colors[key]
+            plot_spectrum(wlen_dict[key],flux_dict[key],range=(range_start[i],range_start[i]+interval),kwargs={'label':key,'color':color})
+        plt.legend()
+        plt.xlabel(r'Wavelength [$\mu$m]')
+        plt.ylabel(r'Flux (a.u.)')
+        plt.show()
 def get_sky_calc_model(obj_coord='23 07 28.9014701064 +21 08 02.109792078',date='2023-10-15T03:25:30'):
     
     coord_target = SkyCoord('%s:%s:%s %s:%s:%s' % tuple(obj_coord.split(' ')),unit=(u.hourangle,u.degree))

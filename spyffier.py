@@ -8,7 +8,7 @@ import sys
 import urllib.request
 import warnings
 
-from pathlib import Path
+from pathlib import Path, PosixPath
 from typing import Dict, List, Optional, Tuple, Union
 
 import astropy.constants as const
@@ -562,13 +562,27 @@ class Pipeline:
             
             indices_groups[sky_group_id] = {obj_tag:np.isin(self.header_data['DATE-OBS'],object_date_obs),sky_tag:np.isin(self.header_data['DATE-OBS'],sky_date_obs)}
         return files_groups
-    
+    @typechecked
+    def _get_wavemap_corr(
+        self,
+        input_dir: str,
+        obs_date: str
+    ):
+        for filepath in self.file_dict['WAVE_MAP_CORR']:
+            if input_dir in Path(filepath).parent.name and obs_date in Path(filepath).stem:
+                return filepath
+        else:
+            raise RuntimeError(
+                f"No WAVE_MAP_CORR found within the folder {input_dir}"
+                f"and {obs_date} in file_dict"
+            )
     @typechecked
     def _create_config(
         self, 
         eso_recipe: str, 
         pipeline_method: str, 
-        verbose: bool
+        verbose: bool,
+        output_dir: Union[str,PosixPath],
     ) -> None:
         """
         Internal method for creating a configuration file with default
@@ -590,7 +604,7 @@ class Pipeline:
             None
         """
 
-        config_file = self.config_folder / f"{pipeline_method}.rc"
+        config_file = output_dir / f"{pipeline_method}.rc"
 
         if shutil.which(self.esorex_path) is None:
             raise RuntimeError(
@@ -934,13 +948,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_dark", "calib_dark", verbose)
+        self._create_config("eris_ifu_dark", "calib_dark", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / "calib_dark.rc"
+        config_file = output_dir / "calib_dark.rc"
 
         esorex = [
             self.esorex_path,
@@ -1075,13 +1089,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_detlin", "calib_detlin", verbose)
+        self._create_config("eris_ifu_detlin", "calib_detlin", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / "calib_detlin.rc"
+        config_file = output_dir / "calib_detlin.rc"
 
         esorex = [
             self.esorex_path,
@@ -1258,13 +1272,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_distortion", "calib_distortion", verbose)
+        self._create_config("eris_ifu_distortion", "calib_distortion", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / "calib_distortion.rc"
+        config_file = output_dir / "calib_distortion.rc"
 
         esorex = [
             self.esorex_path,
@@ -1486,13 +1500,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_flat", "calib_flat", verbose)
+        self._create_config("eris_ifu_flat", "calib_flat", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / "calib_flat.rc"
+        config_file = output_dir / "calib_flat.rc"
 
         esorex = [
             self.esorex_path,
@@ -1677,13 +1691,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_wavecal", "calib_wavecal", verbose)
+        self._create_config("eris_ifu_wavecal", "calib_wavecal", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / "calib_wavecal.rc"
+        config_file = output_dir / "calib_wavecal.rc"
 
         esorex = [
             self.esorex_path,
@@ -1881,14 +1895,14 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_stdstar", "calib_stdstar_flux", verbose)
+        self._create_config("eris_ifu_stdstar", "calib_stdstar_flux", verbose, output_dir = output_dir)
         
         # Run EsoRex
 
         print()
 
-        #config_file = self.config_folder / "calib_stdstar_flux.rc"
-        config_file = self.config_folder / 'eris_ifu_stdstar.rc'
+        #config_file = output_dir / "calib_stdstar_flux.rc"
+        config_file = output_dir / 'eris_ifu_stdstar.rc'
         esorex = [
             self.esorex_path,
             f"--recipe-config={config_file}",
@@ -2124,13 +2138,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_jitter", "science_ifu_jitter", verbose)
+        self._create_config("eris_ifu_jitter", "science_ifu_jitter", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / 'science_ifu_jitter.rc'
+        config_file = output_dir / 'science_ifu_jitter.rc'
         
         if len(new_config.keys()) > 0:
             self.modify_config(config_file, new_config = new_config,eso_recipe = 'eris_ifu_jitter')
@@ -2430,8 +2444,8 @@ class Pipeline:
         # get the object files
         object_waveB = []
         for file_path,item in self.file_dict['OBJECT_WAVE_B'].items():
-            if 'corr_wavemap' in file_path:
-                continue
+            # if 'corr_wavemap' in file_path:
+            #     continue
             if Path(file_path).parent.name == input_folder:
                 print(file_path)
                 hdr = fits.getheader(file_path)
@@ -2481,7 +2495,7 @@ class Pipeline:
             lenwvl,lenxy = np.shape(object_data)
             wvl_params = [hdr['CRVAL2'],hdr['CD2_2']]
             wavelength = np.array([wvl_params[0] + i*wvl_params[1] for i in np.arange(lenwvl)])
-            mean_d_wvl = np.mean(wavelength[:1]-wavelength[:-1])
+            mean_d_wvl = np.mean(wavelength[1:]-wavelength[:-1])
             # read telluric model
             skycoord = SkyCoord(ra=hdr['RA'],dec=hdr['DEC'],unit='deg')
             string_coord = skycoord.to_string('hmsdms').replace('h',' ').replace('d',' ').replace('m',' ').replace('s','')
@@ -2621,13 +2635,13 @@ class Pipeline:
 
         # Create EsoRex configuration file if not found
 
-        self._create_config("eris_ifu_combine_hdrl", "science_ifu_combine", verbose)
+        self._create_config("eris_ifu_combine_hdrl", "science_ifu_combine", verbose, output_dir = output_dir)
 
         # Run EsoRex
 
         print()
 
-        config_file = self.config_folder / 'science_ifu_combine.rc'
+        config_file = output_dir / 'science_ifu_combine.rc'
         
         self.modify_config(config_file, new_config = {'name_i':str(offsets_file)}, eso_recipe = 'eris_ifu_combine_hdrl')
         if len(new_config.keys()) > 0:
