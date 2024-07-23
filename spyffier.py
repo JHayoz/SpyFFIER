@@ -2121,8 +2121,12 @@ class Pipeline:
                 
                 # handle corrected WAVE_MAP differently
                 if not use_corr_wavemap is None:
-                    sof_open.write(f"{use_corr_wavemap} {'WAVE_MAP'}\n")
-                    self._update_files('WAVE_MAP_CORR', f"{use_corr_wavemap}") # this overwrites from WAVE_MAP_CORR to WAVE_MAP!!!
+                    if len(obj_date_obs) > 1:
+                        print('WARNING: MORE THAN 1 OBJECT FRAME PROVIDED')
+                        print('PLEASE ONLY PROVIDE 1 OBJECT FRAME WHEN USING A CORRECTED WAVE_MAP')
+                    wavemap_corr = self._get_wavemap_corr(use_corr_wavemap,obj_date_obs[0])
+                    sof_open.write(f"{wavemap_corr} {'WAVE_MAP'}\n")
+                    self._update_files('WAVE_MAP_CORR', f"{wavemap_corr}") # this overwrites from WAVE_MAP_CORR to WAVE_MAP!!!
             
             # Check if any frames were found
             check_file_types = list(pro_catg.keys())+ list(file_dict_search.keys()) + ['OBJ']

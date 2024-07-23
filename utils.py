@@ -245,7 +245,7 @@ def calibrate_wavelength_frame(
     wlen_corr_init = np.zeros((lenxy))
     print('Determine initial wavelength shift')
     for ij in np.arange(lenxy):
-        print('Progress %.2f' % (ij/lenxy*100),end='\r')
+        print('Progress %.2f' % ((ij+1)/lenxy*100),end='\r')
         
         spectrum_data = object_data[lower_bound:upper_bound,ij]
         
@@ -278,7 +278,7 @@ def calibrate_wavelength_frame(
         wlen_corr_model = np.zeros((lenwvl,32,64))
         print('Determine finer correction in each slit')
         for slit_i in np.arange(32):
-            print('Progress %.2f' % (slit_i/32*100),end='\r')
+            print('Progress %.2f' % ((slit_i+1)/32*100),end='\r')
             
             mask_bad = np.abs(wlen_corr_init_slit[slit_i]-median_wlen_corr) > 2
             # decide if the slit has enough signal: if more than half are bad
@@ -304,14 +304,18 @@ def calibrate_wavelength_frame(
             wlen_slit_shift[slit_i,:] = y_spline
             
             # collapse data within the slit
-            wavelength_slit_corr = wvl_data[np.newaxis,:] - y_spline[:,np.newaxis] * mean_d_wvl
+            wavelength_slit_corr = wvl_data[np.newaxis,:] - wlen_slit_shift[slit_i,:,np.newaxis] * mean_d_wvl
             interp_spectra = np.zeros((64,lenwvl))
             for col_i in np.arange(64):
                 spectrum_data = object_data[lower_bound:upper_bound,col_i]
                 
                 interp_spectra[col_i,:] = interp1d(x=wavelength_slit_corr[col_i],y=spectrum_data,bounds_error=False)(wavelength)
             
-            collapsed_spectrum = np.mean(interp_spectra,axis=0)
+            # collapsed_spectrum = np.mean(interp_spectra,axis=0)
+            # combine the spectra such that the flux is the same in each column
+            mean_std = np.nanstd(interp_spectra,axis=1)
+            norm_flux = interp_spectra/np.where(mean_std == 0, 1, mean_std)[:,np.newaxis]
+            collapsed_spectrum = np.nanmean((norm_flux - np.nanmean(norm_flux,axis=1)[:,np.newaxis]),axis=0)
             collapsed_spectrum_mask_nans = np.isnan(collapsed_spectrum)
             wvl_collapsed,collapsed_spectrum_sel = wavelength[~collapsed_spectrum_mask_nans],collapsed_spectrum[~collapsed_spectrum_mask_nans]
             
