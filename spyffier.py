@@ -2205,9 +2205,9 @@ class Pipeline:
             object_wave_B_files = [Path(output_dir) / f'eris_ifu_jitter_dbg_waveB_{nb_i}.fits' for nb_i in object_files_nbs]
             
             if not use_corr_wavemap is None:
-                self._rename_products(list(object_wave_B_files),f'{file_type}_WAVE_B',name_extension = '_corr_wavemap',add_arcfile=False)
+                self._rename_products(list(object_wave_B_files),f'{file_type}_WAVE_B',name_extension = '_corr_wavemap',add_arcfile=True)
             else:
-                self._rename_products(list(object_wave_B_files),f'{file_type}_WAVE_B',name_extension = '_std_wavemap',add_arcfile=False)
+                self._rename_products(list(object_wave_B_files),f'{file_type}_WAVE_B',name_extension = '_std_wavemap',add_arcfile=True)
         
         for file_type,file_name in files_to_update.items():
             fits_files = output_dir.glob(
@@ -2489,6 +2489,14 @@ class Pipeline:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
+        # read telluric model calibrated on the middle frame
+        file_path = sorted(object_waveB)[len(object_waveB)//2]
+        hdr = fits.getheader(file_path)
+        date_obs = hdr['DATE-OBS']
+        skycoord = SkyCoord(ra=hdr['RA'],dec=hdr['DEC'],unit='deg')
+        string_coord = skycoord.to_string('hmsdms').replace('h',' ').replace('d',' ').replace('m',' ').replace('s','')
+        tellurics_wlen,tellurics_transm,tellurics_flux = get_sky_calc_model(obj_coord=string_coord,date=date_obs[:19])
+        
         # go through each object cube
         for obj_i,file_path in enumerate(object_waveB):
             hdr = fits.getheader(file_path)
@@ -2500,10 +2508,6 @@ class Pipeline:
             wvl_params = [hdr['CRVAL2'],hdr['CD2_2']]
             wavelength = np.array([wvl_params[0] + i*wvl_params[1] for i in np.arange(lenwvl)])
             mean_d_wvl = np.mean(wavelength[1:]-wavelength[:-1])
-            # read telluric model
-            skycoord = SkyCoord(ra=hdr['RA'],dec=hdr['DEC'],unit='deg')
-            string_coord = skycoord.to_string('hmsdms').replace('h',' ').replace('d',' ').replace('m',' ').replace('s','')
-            tellurics_wlen,tellurics_transm,tellurics_flux = get_sky_calc_model(obj_coord=string_coord,date=date_obs[:19])
             
             # apply algorithm depending on method, save the px shift to each wavemap pixel
             wlen_corr_model_frame,wlen_corr_model_frame_px = calibrate_wavelength_frame(
