@@ -21,7 +21,7 @@ setuptools.setup(
     package_data={'spyffier': ['*.txt']},
     install_requires=install_requires,
     tests_require=[],
-    license='MIT',
+    license='GNU',
     zip_safe=False,
     keywords='spyffier',
     classifiers=[
