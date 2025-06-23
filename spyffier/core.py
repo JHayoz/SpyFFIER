@@ -30,7 +30,7 @@ from skimage.restoration import inpaint
 from typeguard import typechecked
 from skimage.registration import phase_cross_correlation
 
-from utils import rebin,calibrate_wavelength_frame,fit_wavelength_error,get_sky_calc_model
+from .utils import rebin,calibrate_wavelength_frame,fit_wavelength_error,get_sky_calc_model
 
 
 class Pipeline:
@@ -774,6 +774,7 @@ class Pipeline:
         self, 
         file_type: str, 
         fits_folder: str, 
+        unfold: bool = False,
         save: bool = True,
         vmin_pc: float = 1,
         vmax_pc: float=99
@@ -806,7 +807,7 @@ class Pipeline:
                 if f"{file_name[-3]}/{file_name[-2]}" != f"{fits_folder_arr[-2]}/{fits_folder_arr[-1]}":
                     continue
 
-                print(f"   - calib/{file_name[-2]}/{file_name[-1][:-4]}png")
+                print(f"   - {file_name[-3]}/{file_name[-2]}/{file_name[-1][:-4]}png")
 
                 with fits.open(item) as hdu_list:
                     plt.figure(figsize=(10, 3.5))
@@ -825,7 +826,10 @@ class Pipeline:
                     if len(shape) == 2:
                         img = data
                     elif len(shape) == 3:
-                        img = np.mean(data,axis=0)
+                        if unfold:
+                            img = data[:,::2,:].reshape((len(data),-1))
+                        else:
+                            img = np.mean(data,axis=0)
                     else:
                         img = data
 
@@ -2226,8 +2230,8 @@ class Pipeline:
         
         # Create plots
 
-        self._plot_image("DAR_CORRECTED_CUBE_MEAN", "product/science_ifu_jitter/" + output_name)
-        self._plot_image("SKY_TWEAKED_CUBE_MEAN", "product/science_ifu_jitter/" + output_name)
+        self._plot_image("DAR_CORRECTED_CUBE", "product/science_ifu_jitter/" + output_name)
+        self._plot_image("SKY_TWEAKED_CUBE", "product/science_ifu_jitter/" + output_name)
         #self._plot_image("SKY_CUBE", "product/science_ifu_jitter")
         #self._plot_image("OBJECT_CUBE_COADD", "product/science_ifu_jitter")
 
@@ -2437,7 +2441,10 @@ class Pipeline:
         output_folder,
         continuum_sigma=60,
         accuracy=10,
-        method = 'spline', # '0-order','0-order-linear','0-order-median','spline'
+        method_tellurics='transmission', # transmission, emission
+        method_slit='spline', # raw, corr, median, linear, spline, fov-linear, spline-smooth, parabola
+        method_high_order='spline', # 0-order, spline
+        ignore_sky = True,
         spline_order=2,
         spline_smoothing=0.4,
         window_size=120,
@@ -2447,13 +2454,17 @@ class Pipeline:
 
         # get the object files
         object_waveB = []
-        for file_path,item in self.file_dict['OBJECT_WAVE_B'].items():
+        if ignore_sky:
+            wave_B_files = self.file_dict['OBJECT_WAVE_B'].items()
+        else:
+            wave_B_files = list(self.file_dict['SKY_WAVE_B'].items()) + list(self.file_dict['OBJECT_WAVE_B'].items())
+        for file_path,item in wave_B_files:
             # if 'corr_wavemap' in file_path:
             #     continue
             if Path(file_path).parent.name == input_folder:
                 print(file_path)
                 hdr = fits.getheader(file_path)
-                if hdr['ESO DPR TYPE'] == 'OBJECT':
+                if hdr['ESO DPR TYPE'] in ['OBJECT','SKY','STD','SKY,STD']:
                     object_waveB += [file_path]
                     print(hdr['ESO DPR TYPE'])
         if len(object_waveB) == 0:
@@ -2467,8 +2478,8 @@ class Pipeline:
             wavemap_files += [wavemap_all_files[0]]
         else:
             for file_i in wavemap_all_files:
-                if not input_dir is None:
-                    if Path(file_i).parent.name == input_dir:
+                if not input_folder is None:
+                    if self.file_dict['WAVE_MAP'][file_i]['SPXW'] == self.file_dict['OBJECT_WAVE_B'][object_waveB[-1]]['SPXW']:
                         wavemap_files += [file_i]
                 else:
                     wavemap_files += [file_i]
@@ -2483,7 +2494,7 @@ class Pipeline:
         
         # create output folder
         if output_folder is None:
-            output_dir = self.calib_folder / "calib_wavelength_cross_corr" / input_dir
+            output_dir = self.calib_folder / "calib_wavelength_cross_corr" / input_folder
         else:
             output_dir = self.calib_folder / "calib_wavelength_cross_corr" / output_folder
         if not os.path.exists(output_dir):
@@ -2491,11 +2502,17 @@ class Pipeline:
         
         # read telluric model calibrated on the middle frame
         file_path = sorted(object_waveB)[len(object_waveB)//2]
+        
         hdr = fits.getheader(file_path)
         date_obs = hdr['DATE-OBS']
         skycoord = SkyCoord(ra=hdr['RA'],dec=hdr['DEC'],unit='deg')
         string_coord = skycoord.to_string('hmsdms').replace('h',' ').replace('d',' ').replace('m',' ').replace('s','')
         tellurics_wlen,tellurics_transm,tellurics_flux = get_sky_calc_model(obj_coord=string_coord,date=date_obs[:19])
+        
+        if method_tellurics == 'transmission':
+            tellurics = tellurics_transm
+        else: # method_tellurics == 'emission'
+            tellurics = tellurics_flux
         
         # go through each object cube
         for obj_i,file_path in enumerate(object_waveB):
@@ -2512,22 +2529,28 @@ class Pipeline:
             # apply algorithm depending on method, save the px shift to each wavemap pixel
             wlen_corr_model_frame,wlen_corr_model_frame_px = calibrate_wavelength_frame(
                 object_data,wavelength,
-                tellurics_wlen=tellurics_wlen,tellurics_transm=tellurics_transm,
+                tellurics_wlen=tellurics_wlen,tellurics_transm=tellurics,
                 filter_sigma=continuum_sigma,
                 accuracy = accuracy,
                 spline_order = spline_order,spline_smoothing = spline_smoothing,
                 window_size = window_size,window_shift_ratio=window_shift_ratio,
-                method=method,
+                method_slit=method_slit,
+                method_high_order=method_high_order,
                 plot=plot
                 )
             # apply correction to wavemap
             wavemap_corr = np.zeros((2048,2048))
             for ij in np.arange(2048):
                 # interpolate the correction to the wavelength of the wavemap
-                interp_corr = interpolate.interp1d(x=wavelength,y=wlen_corr_model_frame_px[:,ij],bounds_error=False,fill_value='extrapolate')
-                column_correction = interp_corr(wavemap[:,ij])
+                # old code: was taking the pixel errors and multiplying by the mean dwvl, but the spacing is not regular on the detector
+                # interp_corr = interpolate.interp1d(x=wavelength,y=wlen_corr_model_frame_px[:,ij],bounds_error=False,fill_value='extrapolate')
+                # column_correction = interp_corr(wavemap[:,ij])
+                # 
+                # wavemap_corr[:,ij] = wavemap[:,ij] - column_correction*mean_d_wvl
+                interp_corr = interpolate.interp1d(x=wavelength,y=wlen_corr_model_frame[:,ij],bounds_error=False,fill_value='extrapolate')
+                wvl_column_correction = interp_corr(wavemap[:,ij])
                 
-                wavemap_corr[:,ij] = wavemap[:,ij] - column_correction*mean_d_wvl
+                wavemap_corr[:,ij] = wavemap[:,ij] - wvl_column_correction
             # save new wavemap
             wavemap_corr_filepath = output_dir / ('wavemap_corr_' + date_obs + '.fits')
             if save_result:

@@ -25,10 +25,10 @@ setuptools.setup(
     zip_safe=False,
     keywords='spyffier',
     classifiers=[
-        'Development Status :: 1 - Alpha',
+        'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Science/Research',
         'Topic :: Scientific/Engineering :: Astronomy',
-        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: GNU General Public License (GPL)',
         'Natural Language :: English',
         'Programming Language :: Python :: 3.10',
     ],
