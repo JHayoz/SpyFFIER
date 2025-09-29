@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SpyFFIER"
+version = "0.1.0"
+description = "This is a tool to reduce VLT/ERIS/SPIFFIER data using the command line tools, with custom functionalities to improve the wavelength calibration."
+authors = [
+  { name = "Jean Hayoz", email = "jeanhayoz94@gmail.com" }
+]
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+dependencies = [
+    "fqdn==1.5.1",
+    "isoduration==20.11.0",
+    "jsonpointer==3.0.0",
+    "jupyter==1.1.1",
+    "pip==23.0.1",
+    "PyAstronomy==0.22.0",
+    "PySocks==1.7.1",
+    "seaborn==0.13.2",
+    "skycalc-ipy",
+    "spectres==2.2.2",
+    "tinycss2==1.4.0",
+    "uri-template==1.3.0",
+    "webcolors==24.11.1",
+    "wheel==0.38.4"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["spyffier"]
