@@ -14,12 +14,14 @@ from sklearn.preprocessing import PolynomialFeatures,SplineTransformer
 from sklearn.pipeline import make_pipeline
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+# define the orderings of the 32 slitlets on the detector. Convention: increasing numbers go from bottom to top of detector
 slits_ordering = np.array([9,8,10,7,11,6,12,5,13,4,14,3,15,2,16,1,32,17,31,18,30,19,29,20,28,21,27,22,26,23,25,24],dtype=int)
+# quick and dirty plot
 def plot_data(data,vmin=5,vmax=95):
     plt.figure(figsize=(10,10))
     plt.imshow(data,vmin=np.nanpercentile(data,vmin),vmax=np.nanpercentile(data,vmax),origin='lower')
     plt.show()
-
+# quick and dirty spectrum plot
 def plot_spectrum(wlen,spectrum,range=(2.2,2.45),kwargs={}):
     mask = np.logical_and(wlen > range[0], wlen < range[1])
     if np.sum(mask) == 0:
@@ -28,6 +30,7 @@ def plot_spectrum(wlen,spectrum,range=(2.2,2.45),kwargs={}):
     plt.plot(wlen[mask],spectrum[mask]/sum-np.mean(spectrum[mask]/sum),**kwargs)
     if 'label' in kwargs.keys():
         plt.legend()
+# plot the wvl correction
 def diagnostic_wvl_solution(wlen_ref,wlen_dict,flux_dict,nb_intervals = 3,interval = 0.01,plot_correction=True):
     colors_x = np.linspace(0,1,len(wlen_dict.keys()))
     colors = {key:mpl.colormaps['viridis'](colors_x[key_i]) for key_i,key in enumerate(wlen_dict.keys())}
@@ -55,6 +58,7 @@ def diagnostic_wvl_solution(wlen_ref,wlen_dict,flux_dict,nb_intervals = 3,interv
         plt.xlabel(r'Wavelength [$\mu$m]')
         plt.ylabel(r'Flux (a.u.)')
         plt.show()
+# download and skycalc model of the atmosphere
 def get_sky_calc_model(obj_coord='23 07 28.9014701064 +21 08 02.109792078',date='2023-10-15T03:25:30'):
     astropy.config.set_temp_cache(path='/home/ipa/quanz/user_accounts/jhayoz/Projects/.astropy/cache')
     
@@ -74,7 +78,7 @@ def get_sky_calc_model(obj_coord='23 07 28.9014701064 +21 08 02.109792078',date=
     transm = tbl['trans'].data
     flux = tbl['flux'].data
     return wvl,transm,flux
-
+# rebin a spectrum into new wavelength bins (at lower spectral resolution)
 def rebin(wlen,flux,wlen_data,flux_err = None, method='linear'):
     #wlen larger than wlen_data
     
@@ -108,7 +112,7 @@ def rebin(wlen,flux,wlen_data,flux_err = None, method='linear'):
     else:
         flux_temp = spectres(wlen_temp,wlen,flux)
         return wlen_temp,flux_temp
-
+# fit a spline function (old)
 def fit_spline_old(data,mask_bad,x_data=None,s=0.4,k=3,skip_edge=0):
     if x_data is None:
         x = np.arange(len(data))
@@ -121,7 +125,7 @@ def fit_spline_old(data,mask_bad,x_data=None,s=0.4,k=3,skip_edge=0):
     spl.set_smoothing_factor(s)
     spline = spl(x)
     return spline
-
+# fit a spline function
 def fit_spline(data,mask_bad,x_data=None,s=0.4,k=3,skip_edge=0):
     if x_data is None:
         x = np.arange(len(data))
@@ -218,7 +222,7 @@ def fit_wavelength_error(wvl_shift,deg=1,lim_mask=4,lim_sel=1,median=0,outlier_m
         mask_close = np.abs(wvl_shift-y_fit) < lim_sel
         y_calib = np.where(mask_close,wvl_shift,y_fit)
     return y_fit,y_calib,~mask_close
-
+# rolling cross-correlation along the wavelength dimension, and fit a spline to the modulation
 def _xcor_spline_wavelength_solution(
     wlen,spectrum_cr,
     tellurics_wlen,tellurics_transm_cr,
@@ -317,7 +321,7 @@ def _xcor_spline_wavelength_solution(
     wlen_corrected = wlen - shift_wvl_spline*mean_wvl_step
     
     return wlen_corr_init,wlen_corrected,shift_wvl_spline,wlen[shift_wvl_px_position],shift_wvl_px
-
+# main function to calibrate the wavelength axis of a frame
 def calibrate_wavelength_frame(
     object_data,wavelength,
     tellurics_wlen,tellurics_transm,
@@ -354,7 +358,7 @@ def calibrate_wavelength_frame(
     # results
     wlen_corr_model_frame_px = np.zeros_like(object_data)
     
-    # initial error
+    # initial wavelength error measurement
     wlen_corr_init = np.zeros((lenxy))
     print('Determine initial wavelength shift')
     # for ij in np.arange(lenxy):
