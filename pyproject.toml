@@ -29,7 +29,8 @@ dependencies = [
     "photutils",
     "scikit-image",
     "scikit-learn",
-    "typeguard"
+    "typeguard",
+    "openpyxl"
 ]
 
 [tool.setuptools]
