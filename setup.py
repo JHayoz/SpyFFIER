@@ -11,7 +11,7 @@ setuptools.setup(
     name='spyffier',
     version='0.1.0',
     description='Data reduction pipeline for VLT/ERIS/SPIFFIER',
-    long_description=open('README.rst').read(),
+    long_description=open('README.md').read(),
     long_description_content_type='text/x-rst',
     author='Jean Hayoz',
     author_email='jhayoz@phys.ethz.ch',
