@@ -4,6 +4,7 @@ from scipy.ndimage import gaussian_filter
 from skimage.registration import phase_cross_correlation
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+import astropy
 import skycalc_ipy
 from scipy.interpolate import UnivariateSpline,interp1d
 from scipy.optimize import curve_fit
