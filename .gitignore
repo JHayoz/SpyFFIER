@@ -51,3 +51,4 @@ src/*/.ipynb_checkpoints/*
 # Specific files #
 ##################
 *test*.ipynb
+example_pipeline/*
