@@ -6,9 +6,9 @@ Install esorex and the ERIS instrument pipeline from the ESO website: https://ww
 
 Then clone SpyFFIER from source and install using pip:
 
-`git clone git@github.com:JHayoz/PynPoint-IFS.git`
+`git clone git@github.com:JHayoz/SpyFFIER.git`
 
-`cd PynPoint-IFS`
+`cd spyffier`
 
 `pip install .`
 
