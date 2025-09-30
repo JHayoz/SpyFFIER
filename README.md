@@ -8,7 +8,7 @@ Then clone SpyFFIER from source and install using pip:
 
 `git clone git@github.com:JHayoz/SpyFFIER.git`
 
-`cd spyffier`
+`cd SpyFFIER`
 
 `pip install .`
 
@@ -22,5 +22,5 @@ Contributions are welcome! Please open issues or submit pull requests.
 This project is licensed under the GNU License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgements
-- If you make use of this package, please cite Hayoz et al. 2025, submitted.
+- If you make use of this package, please cite Hayoz et al. 2025, in preparation.
 - Uses `numpy`, `astropy`, `scipy`, `PynPoint`.
