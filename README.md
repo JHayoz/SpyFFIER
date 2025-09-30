@@ -4,9 +4,13 @@ Python package to reduce VLT/ERIS/SPIFFIER data using esorex commands and custom
 # Installation
 Install esorex and the ERIS instrument pipeline from the ESO website: https://www.eso.org/sci/software/pipelines/.
 
-Then clone SpyFFIER from source:
+Then clone SpyFFIER from source and install using pip:
 
-`git clone git@github.com:JHayoz/PynPoint-IFS.git cd PynPoint-IFS pip install .`
+`git clone git@github.com:JHayoz/PynPoint-IFS.git`
+
+`cd PynPoint-IFS`
+
+`pip install .`
 
 # Usage
 Follow the example.jpnb notebook for a simple data reduction.
