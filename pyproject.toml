@@ -36,3 +36,6 @@ dependencies = [
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["spyffier"]
+
+[tool.setuptools.package-data]
+spyffier = ["*.txt"]
