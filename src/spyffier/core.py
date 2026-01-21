@@ -2343,7 +2343,7 @@ class Pipeline:
                 wvl_calib = np.zeros((2048))
                 for slitlet_i in range(len(shift_trsm_cc_slitlet)):
                     wavelength_shift = shift_trsm_cc_slitlet[slitlet_i]/mean_wvl_step
-                    y_fit,y_calib=fit_wavelength_error(wavelength_shift,deg=1,lim_mask=4,lim_sel=0.5,median=median_shift)
+                    y_fit,y_calib,_=fit_wavelength_error(wavelength_shift,deg=1,lim_mask=4,lim_sel=0.5,median=median_shift)
                     if method == 'median':
                         wvl_calib[slitlet_i*64:(slitlet_i+1)*64]=median_shift*mean_wvl_step*np.ones_like(y_calib)
                     else: 
